@@ -871,9 +871,9 @@ with tab4:
     
     st.markdown("---")
     
-    # NEU: Der dezente Besucher-Zähler ganz unten auf der Analyse-Seite
+    # NEU: Der dezente Besucher-Zähler ganz unten auf der Analyse-Seite (Zuverlässige API)
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown(
-        "<div style='text-align: center;'><img src='https://hits.dwyl.com/Cyber-Engel/finanz-cockpit.svg' alt='Besucherzähler' style='opacity: 0.7;'></div>", 
+        "<div style='text-align: center;'><img src='https://api.visitorbadge.io/api/visitors?path=Cyber-Engel.finanz-cockpit&label=Besucher&countColor=%231f77b4&style=flat' alt='Besucherzähler' style='opacity: 0.8;'></div>", 
         unsafe_allow_html=True
     )
