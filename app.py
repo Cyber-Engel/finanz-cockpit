@@ -4,8 +4,15 @@ import altair as alt
 import io
 import hashlib
 
-# 1. Grundkonfiguration
-st.set_page_config(page_title="Finanz-Cockpit Pro", page_icon="🏢", layout="wide")
+# 1. Grundkonfiguration & SEO-Optimierung
+st.set_page_config(
+    page_title="Finanz-Cockpit Pro | Strategische Vermögensplanung", 
+    page_icon="🏢", 
+    layout="wide",
+    menu_items={
+        'About': "# Finanz-Cockpit Pro\nEin strategisches Tool zur langfristigen Vermögens- und Immobilienplanung."
+    }
+)
 
 # --- INITIALISIERUNG SESSION STATE (Das Gedächtnis) ---
 defaults = {
@@ -108,6 +115,9 @@ def render_gehaltsvorschau(gehalt, rente_j, erhoehung, anz_bef, sprung, interval
 with st.sidebar:
     st.header("💾 Profil-Management")
     st.write("Speichere dein Setup oder lade ein altes.")
+    
+    # NEU: Der Besucher-Zähler
+    st.markdown("![Besucher](https://hits.dwyl.com/Cyber-Engel/finanz-cockpit.svg)")
     
     uploaded_file = st.file_uploader("📂 Profil/Historie laden (.xlsx)", type=["xlsx"])
     
