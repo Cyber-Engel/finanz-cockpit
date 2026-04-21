@@ -116,9 +116,6 @@ with st.sidebar:
     st.header("💾 Profil-Management")
     st.write("Speichere dein Setup oder lade ein altes.")
     
-    # NEU: Der Besucher-Zähler
-    st.markdown("![Besucher](https://hits.dwyl.com/Cyber-Engel/finanz-cockpit.svg)")
-    
     uploaded_file = st.file_uploader("📂 Profil/Historie laden (.xlsx)", type=["xlsx"])
     
     # Bug-Fix: Einmaliger Upload-Check über Dateihash
@@ -873,3 +870,10 @@ with tab4:
         c3.metric("Davon auf Tagesgeld", f"{format_euro_smart(d_plan[-1]['Tagesgeld'])} €")
     
     st.markdown("---")
+    
+    # NEU: Der dezente Besucher-Zähler ganz unten auf der Analyse-Seite
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='text-align: center;'><img src='https://hits.dwyl.com/Cyber-Engel/finanz-cockpit.svg' alt='Besucherzähler' style='opacity: 0.7;'></div>", 
+        unsafe_allow_html=True
+    )
