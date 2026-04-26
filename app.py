@@ -26,12 +26,11 @@ defaults = {
     'wohneigentum_geplant': False, 'kauf_jahr': 5, 'eigenkapital': 50000, 'wohnflaeche': 120, 'nebenkosten_qm': 3.5, 'instandhaltung_qm': 1.5,
     'kredit_summe': 300000, 'zins_pa': 3.5, 'tilgung_pa': 2.0, 'sondertilgung': 0, 'sondertilgung_jahr': 10,
     'rendite_depot': 7.0, 'rendite_konto': 2.0, 'jahre_plan': 40, 'quote_depot': 80,
-    'max_tagesgeld': 20000, 'max_tagesgeld_nach_hauskauf': 40000, 'max_tagesgeld_nach_kind': 30000,
+    'max_tagesgeld': 20000, 'max_tagesgeld_event1': 30000, 'max_tagesgeld_event2': 40000,
     'start_depot_fallback': 10000, 'start_konto_fallback': 5000,
-    'start_immo': 0.0, 'start_schuld': 0.0  # Scope-Bug Fix für Export
+    'start_immo': 0.0, 'start_schuld': 0.0
 }
 
-# Werte ins Kurzzeitgedächtnis schreiben
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
@@ -52,7 +51,6 @@ def format_euro_smart(wert):
         return f"{wert / 1000000:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " Mio."
     return f"{wert:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# Performance-Fix: Gecachter Excel-Export ohne Scope-Bug
 @st.cache_data
 def generate_excel_cached(params_dict, kinder_daten, hist_daten):
     output = io.BytesIO()
@@ -67,7 +65,6 @@ def generate_excel_cached(params_dict, kinder_daten, hist_daten):
         for h in hist_daten:
             export_hist.append({"Jahr": h["Kalenderjahr"], "Depot": h["Depot"], "Tagesgeld": h["Tagesgeld"], "Immo": h["Immobilienwert"], "Schuld": h["Restschuld"]})
         
-        # Startwerte für die nächste Berechnung hinzufügen
         export_hist.append({
             "Jahr": params_dict.get('start_kalenderjahr', 2026), 
             "Depot": params_dict.get('start_depot_fallback', 0), 
@@ -80,7 +77,6 @@ def generate_excel_cached(params_dict, kinder_daten, hist_daten):
     output.seek(0)
     return output.getvalue()
 
-# DRY-Fix: Einheitliche Vorschau für Gehalt P1 & P2
 def render_gehaltsvorschau(gehalt, rente_j, erhoehung, anz_bef, sprung, intervall, color, pause=None):
     jahre_vorschau = list(range(51))
     gehalt_list = []
@@ -118,12 +114,10 @@ with st.sidebar:
     
     uploaded_file = st.file_uploader("📂 Profil/Historie laden (.xlsx)", type=["xlsx"])
     
-    # Bug-Fix: Einmaliger Upload-Check über Dateihash
     if uploaded_file is not None:
         file_bytes = uploaded_file.getvalue()
         file_hash = hashlib.md5(file_bytes).hexdigest()
         
-        # Nur ausführen, wenn es eine NEUE Datei ist
         if st.session_state['last_loaded_file_hash'] != file_hash:
             try:
                 xls = pd.ExcelFile(io.BytesIO(file_bytes))
@@ -133,7 +127,6 @@ with st.sidebar:
                     for _, row in df_params.iterrows():
                         key = row['Parameter']
                         wert = row['Wert']
-                        
                         if key in st.session_state and key in defaults and pd.notna(wert):
                             ziel_typ = type(defaults[key])
                             if ziel_typ == bool:
@@ -161,7 +154,6 @@ with st.sidebar:
                     st.session_state['start_kalenderjahr'] = int(letzter_stand["Jahr"])
                     st.session_state['start_depot_fallback'] = float(letzter_stand["Depot"])
                     st.session_state['start_konto_fallback'] = float(letzter_stand["Tagesgeld"])
-                    
                     st.session_state['start_immo'] = float(pd.to_numeric(letzter_stand["Immo"], errors='coerce'))
                     st.session_state['start_schuld'] = float(pd.to_numeric(letzter_stand["Schuld"], errors='coerce'))
                     
@@ -331,6 +323,8 @@ with tab2:
         st.info("ℹ️ Startwert Kindergeld: 255 € pro Kind/Monat.")
 
 # --- TAB 3: IMMOBILIEN ---
+# FIX: Beide Spalten haben exakt dieselbe Struktur: Subheader → Inputs → Divider → Subheader → Inputs
+# Dadurch sind linke und rechte Spalte vertikal ausgerichtet.
 with tab3:
     st.header("Immobilien-Planung")
     wohneigentum_geplant = st.checkbox("Wohneigentum geplant?", key='wohneigentum_geplant')
@@ -349,20 +343,26 @@ with tab3:
     if wohneigentum_geplant:
         col_i1, col_i2 = st.columns(2)
         with col_i1:
+            # Block 1: Kaufdetails
+            st.subheader("Kaufdetails")
             kauf_jahr = st.number_input("Kaufdatum (in X Jahren)", 0, 40, key='kauf_jahr')
             eigenkapital = st.number_input("Eingebrachtes Eigenkapital (€)", 0, 5000000, step=5000, key='eigenkapital')
             wohnflaeche = st.number_input("Wohnfläche in Quadratmetern (m²)", 0, 500, step=5, key='wohnflaeche')
-            
+
+            # Block 2: Laufende Hauskosten
             st.markdown("---")
             st.subheader("Laufende Hauskosten")
-            nebenkosten_qm = st.number_input("Nebenkosten (Müll, Grundsteuer etc.) pro m²/Monat (€)", 0.0, 10.0, step=0.1, key='nebenkosten_qm')
+            nebenkosten_qm = st.number_input("Nebenkosten pro m²/Monat (€)", 0.0, 10.0, step=0.1, key='nebenkosten_qm')
             instandhaltung_qm = st.number_input("Instandhaltungsrücklage pro m²/Monat (€)", 0.0, 10.0, step=0.1, key='instandhaltung_qm')
-            
+
         with col_i2:
+            # Block 1: Finanzierung (spiegelt Kaufdetails links)
+            st.subheader("Finanzierung")
             kredit_summe = st.number_input("Kredit (€)", 0, 5000000, step=5000, key='kredit_summe')
             zins_pa = st.slider("Jährlicher Zinssatz Hauskredit (%)", 0.0, 10.0, step=0.1, key='zins_pa')
             tilgung_pa = st.slider("Anfängliche Tilgung (%)", 1.0, 10.0, step=0.1, key='tilgung_pa')
-            
+
+            # Block 2: Sondertilgung (spiegelt Laufende Hauskosten links)
             st.markdown("---")
             st.subheader("Sondertilgung")
             sondertilgung = st.number_input("Sondertilgung (einmalig, €)", 0, 500000, step=5000, key='sondertilgung')
@@ -383,34 +383,74 @@ with tab4:
         st.subheader("Spar-Aufteilung & Cashflow")
         quote_depot = st.slider("Monatliche Sparrate: % ins Depot (Rest aufs Tagesgeld)", 0, 100, key='quote_depot')
         
+        # Vorberechnen der relevanten Event-Infos für die Label-Benennung
+        hat_immobilie = wohneigentum_geplant
+        hat_kinder = anzahl_kinder > 0 and len(kinder_liste) > 0
+        erstes_kind_jahr = min(k["jahr"] for k in kinder_liste) if hat_kinder else None
+
+        # --- TAGESGELDLIMITS: Basis immer sichtbar ---
+        st.subheader("Obergrenze Tagesgeld (Automatischer Sweep)")
         max_tagesgeld = st.number_input(
-            "🔹 Obergrenze Tagesgeldkonto (Basis) – ab Jahr 0 (€)", 
-            0, 1000000, step=5000, 
-            help="Automatischer Sweep: Alles, was diesen Betrag übersteigt, wird am Monatsende zinsbringend ins Aktiendepot umgeschichtet.",
+            "🔹 Ziel-Puffer (Basis) – ab Jahr 0 (€)",
+            0, 1000000, step=5000,
+            help="Alles über diesem Betrag wird automatisch ins Depot umgeschichtet.",
             key='max_tagesgeld'
         )
-        
-        max_tagesgeld_nach_hauskauf = max_tagesgeld
-        if wohneigentum_geplant:
-            max_tagesgeld_nach_hauskauf = st.number_input(
-                f"🏠 Obergrenze ab Hauskauf – ab Jahr {kauf_jahr} (€)", 
-                0, 1000000, step=5000,
-                help="Neue Obergrenze nach Immobilienkauf.",
-                key='max_tagesgeld_nach_hauskauf'
-            )
-        
-        max_tagesgeld_nach_kind = max_tagesgeld
-        if anzahl_kinder > 0 and len(kinder_liste) > 0:
-            erstes_kind_jahr = min(k["jahr"] for k in kinder_liste)
-            max_tagesgeld_nach_kind = st.number_input(
-                f"👶 Obergrenze ab 1. Kindsgeburt – ab Jahr {erstes_kind_jahr} (€)", 
-                0, 1000000, step=5000,
-                help="Neue Obergrenze ab Geburt des ersten Kindes.",
-                key='max_tagesgeld_nach_kind'
-            )
-        
+
+        # Initialisieren – werden nur bei Bedarf überschrieben
+        max_tagesgeld_event1 = max_tagesgeld
+        max_tagesgeld_event2 = max_tagesgeld
+
+        # --- Nur anzeigen, wenn mind. ein Event geplant ist ---
+        if hat_immobilie or hat_kinder:
+            
+            if hat_immobilie and hat_kinder:
+                # Beide Events: chronologisch sortieren
+                if kauf_jahr <= erstes_kind_jahr:
+                    # Hauskauf kommt zuerst (oder gleichzeitig)
+                    label_event1 = f"🏠 Neuer Puffer ab Hauskauf (Jahr {kauf_jahr}) (€)"
+                    help_event1 = "Gilt ab dem Jahr des Hauskaufs, solange noch kein Kind da ist."
+                    label_event2 = f"👨‍👩‍👧🏠 Neuer Puffer ab Hauskauf + Kind (ab Jahr {erstes_kind_jahr}) (€)"
+                    help_event2 = "Kombinierter Puffer, sobald sowohl Hauskauf als auch erstes Kind eingetroffen sind."
+                else:
+                    # Kind kommt zuerst
+                    label_event1 = f"👶 Neuer Puffer ab 1. Kind (Jahr {erstes_kind_jahr}) (€)"
+                    help_event1 = "Gilt ab der Geburt des ersten Kindes, solange noch keine Immobilie vorhanden ist."
+                    label_event2 = f"👨‍👩‍👧🏠 Neuer Puffer ab Kind + Hauskauf (ab Jahr {kauf_jahr}) (€)"
+                    help_event2 = "Kombinierter Puffer, sobald sowohl erstes Kind als auch Hauskauf eingetroffen sind."
+
+                max_tagesgeld_event1 = st.number_input(
+                    label_event1, 0, 1000000, step=5000, help=help_event1, key='max_tagesgeld_event1'
+                )
+                max_tagesgeld_event2 = st.number_input(
+                    label_event2, 0, 1000000, step=5000, help=help_event2, key='max_tagesgeld_event2'
+                )
+
+            elif hat_immobilie:
+                # Nur Immobilie
+                label_event1 = f"🏠 Neuer Puffer ab Hauskauf (Jahr {kauf_jahr}) (€)"
+                max_tagesgeld_event1 = st.number_input(
+                    label_event1, 0, 1000000, step=5000,
+                    help="Neue Obergrenze nach dem Immobilienkauf.",
+                    key='max_tagesgeld_event1'
+                )
+                max_tagesgeld_event2 = max_tagesgeld_event1
+
+            elif hat_kinder:
+                # Nur Kinder
+                label_event1 = f"👶 Neuer Puffer ab 1. Kind (Jahr {erstes_kind_jahr}) (€)"
+                max_tagesgeld_event1 = st.number_input(
+                    label_event1, 0, 1000000, step=5000,
+                    help="Neue Obergrenze ab Geburt des ersten Kindes.",
+                    key='max_tagesgeld_event1'
+                )
+                max_tagesgeld_event2 = max_tagesgeld_event1
+
         quote_konto = 100 - quote_depot
 
+    # -----------------------------------------------------------------------
+    # SIMULATIONSLOGIK
+    # -----------------------------------------------------------------------
     def berechne_zwei_konten_logic():
         wert_konto = start_konto
         erster_engpass_jahr = None
@@ -459,7 +499,6 @@ with tab4:
             
         daten = hist_daten.copy()
         
-        # Geometrische Formeln
         zins_mon_depot = (1 + rendite_depot / 100)**(1/12) - 1
         zins_mon_konto = (1 + rendite_konto / 100)**(1/12) - 1
         infl_mon = (1 + inflation_pa / 100)**(1/12) - 1
@@ -501,7 +540,6 @@ with tab4:
                     gewinn_pro_einheit = preis_je_einheit - paket['kaufpreis']
                     gesamtgewinn = gewinn_pro_einheit * paket['menge']
                     steuerlast = max(0, gesamtgewinn) * 0.26375
-                    
                     gesamt_verkaufswert += paket_marktwert
                     steuern += steuerlast
                     zu_verkaufen_netto -= paket_marktwert
@@ -510,10 +548,8 @@ with tab4:
                     gewinn_pro_einheit = preis_je_einheit - paket['kaufpreis']
                     gesamtgewinn = gewinn_pro_einheit * einheiten_zu_verkaufen
                     steuerlast = max(0, gesamtgewinn) * 0.26375
-                    
                     gesamt_verkaufswert += zu_verkaufen_netto
                     steuern += steuerlast
-                    
                     paket['menge'] -= einheiten_zu_verkaufen
                     verbleibende_pakete.append(paket)
                     zu_verkaufen_netto = 0
@@ -529,20 +565,37 @@ with tab4:
                 fehlbetrag = betrag - aktueller_konto_wert
                 puffer = max_tagesgeld
                 netto_bedarf = fehlbetrag + puffer
-                
                 brutto_verkauf, steuern = verkauf_fifo(netto_bedarf, depot_wert, gruende_set, grund, j_m)
-                
                 return puffer, depot_wert - brutto_verkauf, gruende_set
 
         for m in range((jahre_plan * 12) + 1):
             jahr_aktuell = m // 12
-            
+
+            # ---------------------------------------------------------------
+            # Tagesgeldlimit: das höchste gültige Limit ermitteln
+            # Logik:
+            #   - Basis gilt immer
+            #   - event1 gilt ab dem ersten Event (Hauskauf ODER Kind, je was früher)
+            #   - event2 gilt ab dem zweiten Event (wenn beide geplant sind)
+            # Das jeweils HÖCHSTE aktive Limit gewinnt.
+            # ---------------------------------------------------------------
             aktueller_max_tagesgeld = max_tagesgeld
-            if wohneigentum_geplant and m >= kauf_jahr * 12:
-                aktueller_max_tagesgeld = max_tagesgeld_nach_hauskauf
-            if anzahl_kinder > 0 and len(kinder_liste) > 0 and m >= min(k["jahr"] for k in kinder_liste) * 12:
-                aktueller_max_tagesgeld = max_tagesgeld_nach_kind
-            
+
+            if hat_immobilie and hat_kinder and erstes_kind_jahr is not None:
+                # Chronologische Reihenfolge bestimmen
+                erstes_event_monat = min(kauf_jahr, erstes_kind_jahr) * 12
+                zweites_event_monat = max(kauf_jahr, erstes_kind_jahr) * 12
+                if m >= erstes_event_monat:
+                    aktueller_max_tagesgeld = max(aktueller_max_tagesgeld, max_tagesgeld_event1)
+                if m >= zweites_event_monat:
+                    aktueller_max_tagesgeld = max(aktueller_max_tagesgeld, max_tagesgeld_event2)
+            elif hat_immobilie:
+                if m >= kauf_jahr * 12:
+                    aktueller_max_tagesgeld = max(aktueller_max_tagesgeld, max_tagesgeld_event1)
+            elif hat_kinder and erstes_kind_jahr is not None:
+                if m >= erstes_kind_jahr * 12:
+                    aktueller_max_tagesgeld = max(aktueller_max_tagesgeld, max_tagesgeld_event1)
+
             if wohneigentum_geplant and ek_erreicht_jahr is None and wert_konto >= eigenkapital and m <= kauf_jahr * 12:
                 ek_erreicht_jahr = jahr_aktuell
             
@@ -604,7 +657,7 @@ with tab4:
                     hauswert = eigenkapital + kredit_summe 
                     
                 if m == sondertilgung_jahr * 12 and sondertilgung > 0:
-                    wert_konto, wert_depot, engpass_gruende = abziehen(sondertilgung, wert_konto, wert_depot, engpass_gruende, "Sondertilgung Immobilie",jahr_aktuell)
+                    wert_konto, wert_depot, engpass_gruende = abziehen(sondertilgung, wert_konto, wert_depot, engpass_gruende, "Sondertilgung Immobilie", jahr_aktuell)
                     restschuld = max(0, restschuld - sondertilgung)
                 
                 if restschuld > 0:
@@ -661,6 +714,7 @@ with tab4:
                 elif auto_regelmaessig and m > a_jahr * 12 and (m - a_jahr * 12) % (auto_intervall * 12) == 0:
                     wert_konto, wert_depot, engpass_gruende = abziehen(akt_auto_preis, wert_konto, wert_depot, engpass_gruende, "Autokauf (Folgefahrzeug)", jahr_aktuell)
             
+            # Cash-Sweep: Überschuss über aktuellem Limit ins Depot
             if wert_konto > aktueller_max_tagesgeld:
                 ueberschuss = wert_konto - aktueller_max_tagesgeld
                 wert_depot += ueberschuss
@@ -688,11 +742,8 @@ with tab4:
 
     d_plan, engpass_ausloeser, ek_jahr, bottleneck_jahr, jahre_mit_depot_verkauf = berechne_zwei_konten_logic()
     
-    aktuelle_obergrenze_am_ende = max_tagesgeld
-    if wohneigentum_geplant:
-        aktuelle_obergrenze_am_ende = max_tagesgeld_nach_hauskauf
-    if anzahl_kinder > 0 and len(kinder_liste) > 0:
-        aktuelle_obergrenze_am_ende = max_tagesgeld_nach_kind
+    # Finales Tagesgeldlimit für Anzeige
+    aktuelle_obergrenze_am_ende = max_tagesgeld_event2 if (hat_immobilie or hat_kinder) else max_tagesgeld
         
     df_plot = pd.DataFrame(d_plan)
 
@@ -721,87 +772,45 @@ with tab4:
     offset_step = max_vermoegen * 0.05  
     
     if wohneigentum_geplant and ek_jahr is not None:
-        marker_events.append({
-            "Kalenderjahr": start_kalenderjahr + ek_jahr,
-            "Event": "💰 Eigenkapital erreicht",
-            "Typ": "positiv"
-        })
+        marker_events.append({"Kalenderjahr": start_kalenderjahr + ek_jahr, "Event": "💰 Eigenkapital erreicht", "Typ": "positiv"})
     
     if rente_jahr_p1 < jahre_plan:
-        marker_events.append({
-            "Kalenderjahr": start_kalenderjahr + rente_jahr_p1,
-            "Event": "🎓 Renteneintritt P1",
-            "Typ": "neutral"
-        })
+        marker_events.append({"Kalenderjahr": start_kalenderjahr + rente_jahr_p1, "Event": "🎓 Renteneintritt P1", "Typ": "neutral"})
     
     if rente_jahr_p2 < jahre_plan:
-        marker_events.append({
-            "Kalenderjahr": start_kalenderjahr + rente_jahr_p2,
-            "Event": "🎓 Renteneintritt P2",
-            "Typ": "neutral"
-        })
+        marker_events.append({"Kalenderjahr": start_kalenderjahr + rente_jahr_p2, "Event": "🎓 Renteneintritt P2", "Typ": "neutral"})
     
     if wohneigentum_geplant:
         abbezahlt_row = df_plot[(df_plot['Restschuld'] == 0) & (df_plot['Jahr'] >= kauf_jahr)]
         if len(abbezahlt_row) > 0:
             abbezahlt_jahr = abbezahlt_row['Jahr'].min()
-            marker_events.append({
-                "Kalenderjahr": start_kalenderjahr + abbezahlt_jahr,
-                "Event": "🏠 Immobilie abbezahlt",
-                "Typ": "positiv"
-            })
+            marker_events.append({"Kalenderjahr": start_kalenderjahr + abbezahlt_jahr, "Event": "🏠 Immobilie abbezahlt", "Typ": "positiv"})
     
     if bottleneck_jahr is not None:
-        marker_events.append({
-            "Kalenderjahr": start_kalenderjahr + bottleneck_jahr,
-            "Event": "📉 Depotverkauf erforderlich",
-            "Typ": "negativ"
-        })
+        marker_events.append({"Kalenderjahr": start_kalenderjahr + bottleneck_jahr, "Event": "📉 Depotverkauf erforderlich", "Typ": "negativ"})
     
     for jahr_mit_verkauf in jahre_mit_depot_verkauf:
         if bottleneck_jahr is None or jahr_mit_verkauf > bottleneck_jahr:  
-            marker_events.append({
-                "Kalenderjahr": start_kalenderjahr + jahr_mit_verkauf,
-                "Event": "📉 Depot-Liquidierung",
-                "Typ": "negativ"
-            })
+            marker_events.append({"Kalenderjahr": start_kalenderjahr + jahr_mit_verkauf, "Event": "📉 Depot-Liquidierung", "Typ": "negativ"})
     
     for i, kind in enumerate(kinder_liste):
         k_jahr_start = kind["jahr"]
         if k_jahr_start < jahre_plan:
-            marker_events.append({
-                "Kalenderjahr": start_kalenderjahr + k_jahr_start,
-                "Event": f"👶 Geburt Kind {i+1}",
-                "Typ": "positiv"
-            })
+            marker_events.append({"Kalenderjahr": start_kalenderjahr + k_jahr_start, "Event": f"👶 Geburt Kind {i+1}", "Typ": "positiv"})
             k_selbststaendig = k_jahr_start + 25
             if k_selbststaendig <= jahre_plan:
-                marker_events.append({
-                    "Kalenderjahr": start_kalenderjahr + k_selbststaendig,
-                    "Event": f"👨‍🎓 Kind {i+1} selbstständig",
-                    "Typ": "positiv"
-                })
+                marker_events.append({"Kalenderjahr": start_kalenderjahr + k_selbststaendig, "Event": f"👨‍🎓 Kind {i+1} selbstständig", "Typ": "positiv"})
     
     if a_jahr > 0 and a_jahr < jahre_plan:
-        marker_events.append({
-            "Kalenderjahr": start_kalenderjahr + a_jahr,
-            "Event": "🚗 Autokauf",
-            "Typ": "negativ"
-        })
-        
+        marker_events.append({"Kalenderjahr": start_kalenderjahr + a_jahr, "Event": "🚗 Autokauf", "Typ": "negativ"})
         if auto_regelmaessig and auto_intervall > 0:
             next_auto = a_jahr + auto_intervall
             while next_auto <= jahre_plan:
-                marker_events.append({
-                    "Kalenderjahr": start_kalenderjahr + next_auto,
-                    "Event": "🚗 Autokauf (Folgefahrzeug)",
-                    "Typ": "negativ"
-                })
+                marker_events.append({"Kalenderjahr": start_kalenderjahr + next_auto, "Event": "🚗 Autokauf (Folgefahrzeug)", "Typ": "negativ"})
                 next_auto += auto_intervall
     
     if marker_events:
         df_marker_all = pd.DataFrame(marker_events)
-        
         ereignisse_pro_jahr = df_marker_all.groupby('Kalenderjahr').size()
         df_marker_all['Offset_Index'] = 0
         
@@ -829,12 +838,10 @@ with tab4:
 
     if bottleneck_jahr is not None:
         st.error(f"⚠️ **Strategisches Rebalancing im Jahr {start_kalenderjahr + bottleneck_jahr} erforderlich!**")
-        
         st.markdown(f"""
         Dein Cash-Bestand ist in diesem Jahr auf 0 € gefallen. Das System hat automatisch Aktien nach dem FIFO-Prinzip verkauft (mit Berechnung der Kapitalertragssteuer: 26,375% auf Gewinne),
         um dein Tagesgeldkonto sofort wieder auf den Ziel-Puffer von **{format_euro_smart(aktuelle_obergrenze_am_ende)}** aufzufüllen.
         """)
-
         with st.expander("Analyse der Ursachen & Lösungswege"):
             st.write(f"**Identifizierte Auslöser:** {', '.join(engpass_ausloeser)}")
             st.markdown("---")
@@ -861,7 +868,6 @@ with tab4:
         f"Kaufkraft heute: {format_euro_smart(kaufkraft_heute)} €",
         delta_color="off" 
     )
-    
     c2.metric("Davon liquide (Depot + Tagesgeld)", f"{format_euro_smart(d_plan[-1]['Depot'] + d_plan[-1]['Tagesgeld'])} €")
     
     if wohneigentum_geplant:
